@@ -66,7 +66,7 @@
   .busy .mic { opacity: .5; pointer-events: none; }
   .title { font-size: 22px; font-weight: 600; letter-spacing: -0.015em; margin: 0 0 6px; min-height: 33px; }
   .sub { color: var(--muted); margin: 0; max-width: 34ch; min-height: 26px; font-size: 16px; }
-  .sub.bad { color: var(--bad); }
+  .sub.bad, .note.bad { color: var(--bad); }
   .progress { width: 180px; height: 3px; border-radius: 2px; background: var(--soft); overflow: hidden; margin: 14px auto 0; visibility: hidden; }
   .progress > div { height: 100%; width: 0; background: var(--text); transition: width .25s; }
 
@@ -116,6 +116,10 @@
   .check { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 14px; }
   .log { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow: auto; background: var(--bg); border-radius: 10px; padding: 10px; margin: 0; }
   .note { color: var(--faint); font-size: 13px; min-height: 18px; margin: 0; }
+  .card > select { font: inherit; font-size: 15px; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; min-height: 44px; width: 100%; }
+  .progress.wide { width: 100%; margin: 12px 0 0; }
+  .card .note { margin: 8px 0 12px; }
+  .pill.full { width: 100%; flex: none; }
 </style>
 </head>
 <body>
@@ -164,6 +168,15 @@
     </div>
 
     <div class="card">
+      <h2>Vorlese-Stimme</h2>
+      <p>Freie Stimmen laufen direkt auf dem Gerät und kosten nichts. Beim ersten Anhören wird die Stimme einmalig geladen.</p>
+      <select id="stimme" aria-label="Vorlese-Stimme"></select>
+      <div class="progress wide" id="st-progress"><div></div></div>
+      <p class="note" id="st-status"></p>
+      <button class="pill dark full" id="probe">Probe hören</button>
+    </div>
+
+    <div class="card">
       <details class="tech" id="tech">
         <summary>Technische Details</summary>
         <div class="tech-body">
@@ -175,10 +188,6 @@
             </select>
           </div>
           <label class="check" id="gpu-wrap" hidden><input type="checkbox" id="gpu"> Grafikchip nutzen (Versuch)</label>
-          <div class="field">
-            <label for="stimme">Vorlese-Stimme</label>
-            <select id="stimme"></select>
-          </div>
           <div class="field">
             <label>Zum Vergleich: Erkennung von Apple bzw. Google</label>
             <button class="small-btn" id="apple">Damit sprechen</button>
@@ -406,7 +415,7 @@ function mikroFehler(err) {
 $('mic').onclick = async () => {
   if (rec && rec.state === 'recording') { rec.stop(); return; }
   if (!hatMikro || !hatRecorder) return;
-  if (hatTTS) speechSynthesis.cancel();
+  stoppen();
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
   } catch (err) { mikroFehler(err); return; }
@@ -434,31 +443,148 @@ $('mic').onclick = async () => {
 window.__testErkennung = (blob) => erkenne(blob, 'Testdatei'); // nur für automatische Prüfung
 
 // ---------- Vorlesen ----------
-function stimmenLaden() {
-  if (!hatTTS) { $('stimme').innerHTML = '<option>Nicht verfügbar</option>'; return; }
-  const alle = speechSynthesis.getVoices();
-  const de = alle.filter((v) => (v.lang || '').toLowerCase().startsWith('de'));
-  const liste = de.length ? de : alle;
-  const vorher = $('stimme').value;
-  $('stimme').innerHTML = liste.map((v) => `<option value="${v.voiceURI}">${v.name.replace(/ \(.*\)$/, '')}${v.localService ? '' : ' · online'}</option>`).join('');
-  const bevorzugt = liste.find((v) => /Anna|Helena|Markus|Petra|Yannick/.test(v.name));
-  if (vorher) $('stimme').value = vorher; else if (bevorzugt) $('stimme').value = bevorzugt.voiceURI;
-  if (alle.length && !stimmenLaden.geloggt) { stimmenLaden.geloggt = true; log(`Stimmen: ${alle.length}, davon ${de.length} deutsch`); }
-}
-if (hatTTS) { stimmenLaden(); speechSynthesis.onvoiceschanged = stimmenLaden; }
-$('vorlesen').onclick = () => {
-  if (!hatTTS) return;
-  if (speechSynthesis.speaking) { speechSynthesis.cancel(); $('vorlesen').textContent = 'Vorlesen'; return; }
-  const text = $('text').textContent.trim();
-  if (!text) return;
-  const u = new SpeechSynthesisUtterance(text);
-  const v = speechSynthesis.getVoices().find((x) => x.voiceURI === $('stimme').value);
-  if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'de-DE';
-  u.onstart = () => { $('vorlesen').textContent = 'Stopp'; };
-  u.onend = () => { $('vorlesen').textContent = 'Vorlesen'; log(`Vorlesen ok (${v ? v.name : 'Standard'})`); };
-  u.onerror = (e) => { $('vorlesen').textContent = 'Vorlesen'; if (e.error !== 'canceled' && e.error !== 'interrupted') log('Vorlesen Fehler: ' + e.error); };
-  speechSynthesis.speak(u);
+// Freie Piper-Stimmen, laufen per WebAssembly auf dem Gerät. Quelle und Größen: huggingface.co/rhasspy/piper-voices.
+// Ältere „low“-Modelle (Ramona, Eva, Karlsson, Pavoque, Kerstin low) passen nicht zum Sprachbaustein und fehlen deshalb.
+const PIPER = [
+  ['de_DE-thorsten-medium', 'Thorsten · männlich', 63],
+  ['de_DE-kerstin-medium', 'Kerstin · weiblich', 63],
+  ['de_DE-thorsten-high', 'Thorsten HD · männlich, beste Qualität', 114],
+  ['de_DE-thorsten_emotional-medium', 'Thorsten heiter · männlich', 77],
+];
+const PROBE_TEXT = 'Hallo, ich bin deine Vorlese-Stimme. Morgen um zehn Uhr steht die Bestellung an, danach geht es mit dem Businessplan weiter.';
+const piperCode = `
+import * as tts from 'https://cdn.jsdelivr.net/npm/@mintplex-labs/piper-tts-web@1.0.5/+esm';
+const WASM = {
+  onnxWasm: 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/',
+  piperData: 'https://cdn.jsdelivr.net/npm/@diffusionstudio/piper-wasm@1.0.0/build/piper_phonemize.data',
+  piperWasm: 'https://cdn.jsdelivr.net/npm/@diffusionstudio/piper-wasm@1.0.0/build/piper_phonemize.wasm'
 };
+// Stimmen aus dem offiziellen Piper-Verzeichnis laden (enthält auch Kerstin in neuerer Fassung)
+const echtesFetch = self.fetch.bind(self);
+self.fetch = (u, o) => echtesFetch(String(u).replace('huggingface.co/diffusionstudio/piper-voices', 'huggingface.co/rhasspy/piper-voices'), o);
+tts.PATH_MAP['de_DE-kerstin-medium'] = 'de/de_DE/kerstin/medium/de_DE-kerstin-medium.onnx';
+let session = null, aktiv = '';
+self.onmessage = async (e) => {
+  const m = e.data;
+  try {
+    if (!session || aktiv !== m.stimme) {
+      tts.TtsSession._instance = null;
+      const t0 = performance.now();
+      session = await tts.TtsSession.create({
+        voiceId: m.stimme, wasmPaths: WASM,
+        progress: (p) => { if (p && p.total && p.url && !String(p.url).startsWith('tts://')) self.postMessage({ typ: 'fortschritt', anteil: p.loaded / p.total }); }
+      });
+      aktiv = m.stimme;
+      self.postMessage({ typ: 'geladen', stimme: m.stimme, zeit: (performance.now() - t0) / 1000 });
+    }
+    const t0 = performance.now();
+    const wav = await session.predict(m.text);
+    const buf = await wav.arrayBuffer();
+    self.postMessage({ typ: 'audio', id: m.id, buf, zeit: (performance.now() - t0) / 1000 }, [buf]);
+  } catch (err) {
+    self.postMessage({ typ: 'fehler', id: m.id, text: String(err && err.message || err) });
+  }
+};`;
+let piperWorker = null, piperWarte = null, anfrageNr = 0;
+function piperStarten() {
+  if (piperWorker) return;
+  piperWorker = new Worker(URL.createObjectURL(new Blob([piperCode], { type: 'text/javascript' })), { type: 'module' });
+  piperWorker.onerror = (e) => { const t = 'Stimmen-Prozess abgestürzt: ' + (e.message || 'unbekannt'); log(t); piperWorker = null; if (piperWarte) { piperWarte.reject(new Error(t)); piperWarte = null; } };
+  piperWorker.onmessage = (e) => {
+    const m = e.data;
+    if (m.typ === 'fortschritt') { stimmStatus(`Stimme wird einmalig geladen … ${Math.round(m.anteil * 100)} %`, m.anteil); }
+    else if (m.typ === 'geladen') { log(`Stimme geladen: ${m.stimme} in ${fmt(m.zeit)} s`); stimmStatus('Stimme bereit.', null); }
+    else if (m.typ === 'audio') { if (piperWarte && piperWarte.id === m.id) { piperWarte.resolve(m); piperWarte = null; } }
+    else if (m.typ === 'fehler') { log('Stimme Fehler: ' + m.text); if (piperWarte && piperWarte.id === m.id) { piperWarte.reject(new Error(m.text)); piperWarte = null; } }
+  };
+}
+function piperSprechen(stimme, text) {
+  piperStarten();
+  const id = ++anfrageNr;
+  return new Promise((resolve, reject) => {
+    piperWarte = { id, resolve, reject };
+    piperWorker.postMessage({ id, stimme, text });
+  });
+}
+function stimmStatus(text, anteil) {
+  $('st-status').textContent = text;
+  $('st-progress').style.visibility = anteil == null ? 'hidden' : 'visible';
+  $('st-progress').firstElementChild.style.width = ((anteil || 0) * 100) + '%';
+}
+
+// Abspielen über AudioContext: wird beim Tippen freigeschaltet, damit iOS es später abspielen lässt
+let audioCtx = null, quelle = null, spielt = false, aktiverKnopf = null;
+function audioFreischalten() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!audioCtx) audioCtx = new AC();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+function knopfText(k, t) { if (k) k.textContent = t; }
+function stoppen() {
+  if (quelle) { try { quelle.stop(); } catch {} quelle = null; }
+  if (hatTTS) speechSynthesis.cancel();
+  if (piperWarte) { piperWarte.reject(new Error('abgebrochen')); piperWarte = null; }
+  spielt = false;
+  knopfText($('vorlesen'), 'Vorlesen'); knopfText($('probe'), 'Probe hören');
+}
+async function vorlesen(text, knopf, ruhetext) {
+  if (spielt) { stoppen(); return; }
+  if (!text) return;
+  const wahl = $('stimme').value;
+  try { localStorage.setItem('stimme', wahl); } catch {}
+  spielt = true; aktiverKnopf = knopf;
+  if (wahl.startsWith('sys:')) {
+    if (!hatTTS) { spielt = false; return; }
+    const u = new SpeechSynthesisUtterance(text);
+    const v = speechSynthesis.getVoices().find((x) => x.voiceURI === wahl.slice(4));
+    if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'de-DE';
+    u.onstart = () => knopfText(knopf, 'Stopp');
+    u.onend = () => { spielt = false; knopfText(knopf, ruhetext); log(`Vorlesen ok (Gerätestimme ${v ? v.name : 'Standard'})`); };
+    u.onerror = (e) => { spielt = false; knopfText(knopf, ruhetext); if (e.error !== 'canceled' && e.error !== 'interrupted') log('Vorlesen Fehler: ' + e.error); };
+    speechSynthesis.speak(u);
+    return;
+  }
+  audioFreischalten();
+  knopfText(knopf, 'Wird vorbereitet …');
+  try {
+    const m = await piperSprechen(wahl, text);
+    if (!spielt) return; // inzwischen gestoppt
+    const puffer = await audioCtx.decodeAudioData(m.buf);
+    const q = audioCtx.createBufferSource();
+    q.buffer = puffer; q.connect(audioCtx.destination);
+    q.onended = () => { if (quelle === q) { spielt = false; quelle = null; knopfText(knopf, ruhetext); } };
+    quelle = q;
+    q.start();
+    knopfText(knopf, 'Stopp');
+    stimmStatus(`Erzeugt in ${fmt(m.zeit)} s · ${fmt(puffer.duration)} s Sprache`, null);
+    log(`Vorlesen ok (${wahl}): erzeugt in ${fmt(m.zeit)} s für ${fmt(puffer.duration)} s Sprache`);
+  } catch (err) {
+    if (err.message === 'abgebrochen') return;
+    spielt = false; knopfText(knopf, ruhetext);
+    stimmStatus('Die Stimme konnte nicht geladen werden. Probier eine andere oder kopiere das Protokoll für Claude.', null);
+    $('st-status').classList.add('bad');
+    log('Vorlesen fehlgeschlagen: ' + (err.message || err));
+  }
+}
+function stimmenLaden() {
+  const vorher = $('stimme').value || (() => { try { return localStorage.getItem('stimme'); } catch { return null; } })() || PIPER[0][0];
+  let html = '<optgroup label="Freie Stimmen (auf dem Gerät)">' +
+    PIPER.map(([id, name, mb]) => `<option value="${id}">${name} · ${mb} MB</option>`).join('') + '</optgroup>';
+  if (hatTTS) {
+    const de = speechSynthesis.getVoices().filter((v) => (v.lang || '').toLowerCase().startsWith('de'));
+    if (de.length) html += '<optgroup label="Gerätestimmen (zum Vergleich)">' +
+      de.map((v) => `<option value="sys:${v.voiceURI}">${v.name.replace(/ \(.*\)$/, '')}${v.localService ? '' : ' · online'}</option>`).join('') + '</optgroup>';
+    if (de.length && !stimmenLaden.geloggt) { stimmenLaden.geloggt = true; log(`Gerätestimmen deutsch: ${de.length}`); }
+  }
+  $('stimme').innerHTML = html;
+  $('stimme').value = vorher;
+  if (!$('stimme').value) $('stimme').value = PIPER[0][0];
+}
+stimmenLaden();
+if (hatTTS) speechSynthesis.onvoiceschanged = stimmenLaden;
+$('stimme').onchange = () => { stoppen(); $('st-status').classList.remove('bad'); stimmStatus('', null); };
+$('vorlesen').onclick = () => vorlesen($('text').textContent.trim(), $('vorlesen'), 'Vorlesen');
+$('probe').onclick = () => vorlesen(PROBE_TEXT, $('probe'), 'Probe hören');
 
 // ---------- Kopieren ----------
 async function kopiere(text, ziel, ok) {
