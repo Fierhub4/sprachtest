@@ -451,7 +451,23 @@ const PIPER = [
   ['de_DE-thorsten-high', 'Thorsten HD · männlich, beste Qualität', 114],
   ['de_DE-thorsten_emotional-medium', 'Thorsten heiter · männlich', 77],
 ];
-const PROBE_TEXT = 'Hallo, ich bin deine Vorlese-Stimme. Morgen um zehn Uhr steht die Bestellung an, danach geht es mit dem Businessplan weiter.';
+// Aussprache: englische Wörter so schreiben, wie eine deutsche Stimme sie richtig sagt
+const AUSSPRACHE = [
+  ['Businessplan', 'Bisnisplan'], ['Businesspläne', 'Bisnispläne'], ['Business', 'Bisnis'],
+  ['Meetings', 'Mietings'], ['Meeting', 'Mieting'], ['E-Mails', 'Imeils'], ['E-Mail', 'Imeil'], ['Mails', 'Meils'], ['Mail', 'Meil'],
+  ['Teams', 'Tiems'], ['Team', 'Tiem'], ['Updates', 'Apdeits'], ['Update', 'Apdeit'], ['Deadlines', 'Dedleins'], ['Deadline', 'Dedlein'],
+  ['Feedback', 'Fiedbäck'], ['To-dos', 'Tudus'], ['To-do', 'Tudu'], ['Todos', 'Tudus'], ['Todo', 'Tudu'], ['Calls', 'Kols'], ['Call', 'Kol'],
+  ['Online', 'Onlein'], ['Laptop', 'Läptop'], ['Download', 'Daunlod'], ['Homeoffice', 'Houmoffiss'], ['Workshop', 'Wörkschop'],
+  ['Social Media', 'Soschel Midia'], ['Claude', 'Klohd'], ['iPhone', 'Ei-Fohn'], ['App', 'Äpp'], ['Apps', 'Äpps'],
+];
+function aussprache(text) {
+  let t = text;
+  for (const [wort, laut] of AUSSPRACHE) {
+    t = t.replace(new RegExp(`(^|[^A-Za-zÄÖÜäöüß])${wort.replace(/[-]/g, '\\-')}(?=$|[^A-Za-zÄÖÜäöüß])`, 'gi'), (_, vor) => vor + laut);
+  }
+  return t;
+}
+const PROBE_TEXT = 'Hallo, ich bin deine Vorlese-Stimme. Morgen um zehn Uhr steht die Bestellung an, danach geht es mit dem Businessplan weiter. Das Meeting mit dem Team ist am Freitag.';
 const piperCode = `
 import * as tts from 'https://cdn.jsdelivr.net/npm/@mintplex-labs/piper-tts-web@1.0.5/+esm';
 const WASM = {
@@ -463,9 +479,11 @@ const WASM = {
 const echtesFetch = self.fetch.bind(self);
 self.fetch = (u, o) => echtesFetch(String(u).replace('huggingface.co/diffusionstudio/piper-voices', 'huggingface.co/rhasspy/piper-voices'), o);
 tts.PATH_MAP['de_DE-kerstin-medium'] = 'de/de_DE/kerstin/medium/de_DE-kerstin-medium.onnx';
-let session = null, aktiv = '';
-self.onmessage = async (e) => {
-  const m = e.data;
+let session = null, aktiv = '', kette = Promise.resolve(), neueste = 0;
+// Strikt nacheinander: sonst kann eine noch ladende Stimme die neu gewählte überholen
+self.onmessage = (e) => { neueste = Math.max(neueste, e.data.id); kette = kette.then(() => bearbeite(e.data)); };
+async function bearbeite(m) {
+  if (m.id < neueste) return; // längst überholt, gar nicht erst laden
   try {
     if (!session || aktiv !== m.stimme) {
       tts.TtsSession._instance = null;
@@ -484,7 +502,7 @@ self.onmessage = async (e) => {
   } catch (err) {
     self.postMessage({ typ: 'fehler', id: m.id, text: String(err && err.message || err) });
   }
-};`;
+}`;
 let piperWorker = null, piperWarte = null, anfrageNr = 0;
 function piperStarten() {
   if (piperWorker) return;
@@ -530,6 +548,7 @@ function stoppen() {
 async function vorlesen(text, knopf, ruhetext) {
   if (spielt) { stoppen(); return; }
   if (!text) return;
+  text = aussprache(text);
   const wahl = $('stimme').value;
   try { localStorage.setItem('stimme', wahl); } catch {}
   spielt = true; aktiverKnopf = knopf;
