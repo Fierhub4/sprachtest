@@ -135,7 +135,7 @@
 
   <section class="card" aria-labelledby="t-vor">
     <h2 id="t-vor">3. Vorlesen</h2>
-    <p class="hint">Liest den Text aus Test 1 mit einer Stimme des Geräts vor. Kostenlos und ohne Internet.</p>
+    <p class="hint">Liest den Text aus Test 1 mit einer Stimme des Geräts vor. Kostenlos; Stimmen mit „online“ brauchen Internet.</p>
     <div class="row">
       <select id="stimme" aria-label="Stimme"></select>
       <button class="primary" id="vorlesen">Vorlesen</button>
@@ -218,7 +218,7 @@ const dateien = {};
 function neuerWorker() {
   if (worker) worker.terminate();
   worker = new Worker(URL.createObjectURL(new Blob([workerCode], { type: 'text/javascript' })), { type: 'module' });
-  worker.onerror = (e) => { const t = 'Hintergrund-Prozess fehlgeschlagen: ' + (e.message || 'unbekannt'); $('modell-status').textContent = t; log(t); if (warteLaden) { warteLaden.reject(new Error(t)); warteLaden = null; } };
+  worker.onerror = (e) => { const t = 'Hintergrund-Prozess fehlgeschlagen: ' + (e.message || 'unbekannt'); $('modell-status').textContent = t; log(t); if (warteLaden) { warteLaden.reject(new Error(t)); warteLaden = null; } if (warteText) { warteText.reject(new Error(t)); warteText = null; } modellBereit = false; };
   worker.onmessage = (e) => {
     const m = e.data;
     if (m.typ === 'fortschritt') {
@@ -261,7 +261,7 @@ function modellLaden() {
   return promise;
 }
 $('laden').onclick = () => modellLaden().catch(() => {});
-$('modell').onchange = $('gpu').onchange = () => { modellBereit = false; $('modell-status').textContent = 'Noch nicht geladen.'; };
+$('modell').onchange = $('gpu').onchange = () => { modellBereit = false; if (warteLaden) { warteLaden.reject(new Error('Modell gewechselt')); warteLaden = null; } $('modell-status').textContent = 'Noch nicht geladen.'; };
 
 // Audio auf 16 kHz Mono bringen (das braucht Whisper)
 async function zu16k(blob) {
@@ -391,7 +391,8 @@ $('vorlesen').onclick = () => {
   u.onstart = () => { $('vor-status').textContent = 'Liest vor …'; };
   u.onend = () => { $('vor-status').textContent = 'Fertig.'; log(`Vorlesen ok mit Stimme ${v ? v.name : 'Standard'}`); };
   u.onerror = (e) => { $('vor-status').textContent = 'Fehler: ' + e.error; log('Vorlesen Fehler: ' + e.error); };
-  speechSynthesis.speak(u);
+  // Safari verschluckt manchmal Sprache direkt nach cancel(), daher kurz warten
+  setTimeout(() => speechSynthesis.speak(u), speechSynthesis.speaking ? 120 : 0);
 };
 $('stopp').onclick = () => { if (hatTTS) speechSynthesis.cancel(); $('vor-status').textContent = 'Gestoppt.'; };
 
