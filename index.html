@@ -448,7 +448,7 @@ window.__testErkennung = (blob) => erkenne(blob, 'Testdatei'); // nur für autom
 const PIPER = [
   ['de_DE-thorsten-medium', 'Thorsten · männlich', 63],
   ['de_DE-kerstin-medium', 'Kerstin · weiblich', 63],
-  ['de_DE-thorsten-high', 'Thorsten HD · männlich, beste Qualität', 114],
+  ['de_DE-thorsten-high', 'Thorsten HD · männlich', 114],
   ['de_DE-thorsten_emotional-medium', 'Thorsten heiter · männlich', 77],
 ];
 // Aussprache: englische Wörter so schreiben, wie eine deutsche Stimme sie richtig sagt
@@ -532,6 +532,8 @@ function stimmStatus(text, anteil) {
 
 // Abspielen über AudioContext: wird beim Tippen freigeschaltet, damit iOS es später abspielen lässt
 let audioCtx = null, quelle = null, spielt = false, aktiverKnopf = null;
+// iPhone: auch bei eingeschaltetem Stummschalter hörbar (Safari 17+)
+try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
 function audioFreischalten() {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!audioCtx) audioCtx = new AC();
@@ -546,7 +548,7 @@ function stoppen() {
   knopfText($('vorlesen'), 'Vorlesen'); knopfText($('probe'), 'Probe hören');
 }
 async function vorlesen(text, knopf, ruhetext) {
-  if (spielt) { stoppen(); return; }
+  if (spielt) { const gleich = aktiverKnopf === knopf; stoppen(); if (gleich) return; }
   if (!text) return;
   text = aussprache(text);
   const wahl = $('stimme').value;
