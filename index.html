@@ -125,7 +125,7 @@
 
     <div class="card banner" id="banner" style="margin-top:12px">
       <h2>Als App auf den Home-Bildschirm</h2>
-      <p style="margin:0">Unten auf <svg class="share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M6 11v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-8"/></svg> Teilen tippen, dann „Zum Home-Bildschirm“. Danach die App von dort öffnen.</p>
+      <p style="margin:0">Auf <svg class="share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M6 11v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-8"/></svg> Teilen tippen (steckt manchmal hinter „…“), dann „Zum Home-Bildschirm“. Danach die App von dort öffnen.</p>
     </div>
 
     <section class="stage" id="stage" aria-live="polite">
@@ -158,7 +158,7 @@
       <div class="qr"><img src="qr.svg" alt="QR-Code zu fierhub4.github.io/sprachtest"></div>
       <ol class="steps">
         <li>Code mit der Kamera scannen und den Link antippen.</li>
-        <li>In Safari unten auf Teilen tippen, dann „Zum Home-Bildschirm“.</li>
+        <li>In Safari auf Teilen tippen (manchmal hinter „…“), dann „Zum Home-Bildschirm“.</li>
         <li>„Sprachtest“ vom Home-Bildschirm öffnen und das Mikrofon erlauben.</li>
       </ol>
     </div>
@@ -372,6 +372,7 @@ function pegelStarten(s) {
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     pegelCtx = new AC();
+    if (pegelCtx.resume) pegelCtx.resume();
     const an = pegelCtx.createAnalyser(); an.fftSize = 512;
     pegelCtx.createMediaStreamSource(s).connect(an);
     const d = new Uint8Array(an.fftSize);
