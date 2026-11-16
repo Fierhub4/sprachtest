@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sprachtest</title>
+<meta name="description" content="Test: Spracherkennung und Vorlesen direkt auf dem Gerät, ohne Kosten.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sprachtest">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+<style>
+  :root {
+    --bg: #f5f5f7; --card: #ffffff; --text: #1d1d1f; --muted: #6e6e73;
+    --line: #e5e5ea; --accent: #0a66d8; --accent-text: #ffffff;
+    --ok: #1f7a3a; --ok-bg: #e7f4ea; --warn: #8a5a00; --warn-bg: #fdf3dd;
+    --bad: #b3261e; --bad-bg: #fbe9e7; --rec: #d70015;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1c1c1e; --card: #2c2c2e; --text: #f5f5f7; --muted: #a1a1a6;
+      --line: #3a3a3c; --accent: #4c9aff; --accent-text: #0b0b0c;
+      --ok: #7fd394; --ok-bg: #1f3325; --warn: #f0c36b; --warn-bg: #3a2f17;
+      --bad: #ff8a80; --bad-bg: #3d1f1d; --rec: #ff453a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1c1c1e; --card: #2c2c2e; --text: #f5f5f7; --muted: #a1a1a6;
+    --line: #3a3a3c; --accent: #4c9aff; --accent-text: #0b0b0c;
+    --ok: #7fd394; --ok-bg: #1f3325; --warn: #f0c36b; --warn-bg: #3a2f17;
+    --bad: #ff8a80; --bad-bg: #3d1f1d; --rec: #ff453a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom));
+  }
+  main { max-width: 560px; margin: 0 auto; }
+  h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin: 8px 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 20px; }
+  h2 { font-size: 17px; font-weight: 600; margin: 0 0 4px; }
+  .card { background: var(--card); border-radius: 14px; padding: 16px; margin-bottom: 14px; border: 1px solid var(--line); }
+  .hint { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 13px; padding: 4px 10px; border-radius: 999px; background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+  .chip.ok { background: var(--ok-bg); color: var(--ok); border-color: transparent; }
+  .chip.warn { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
+  .chip.bad { background: var(--bad-bg); color: var(--bad); border-color: transparent; }
+  button, select {
+    font: inherit; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--card); color: var(--text); padding: 10px 14px; min-height: 44px;
+  }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: transparent; font-weight: 600; }
+  button:disabled { opacity: .45; cursor: default; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .row > select { flex: 1 1 180px; min-width: 0; }
+  .rec-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 8px 0 4px; }
+  .rec {
+    width: 88px; height: 88px; border-radius: 50%; border: none; padding: 0;
+    background: var(--accent); color: var(--accent-text); display: grid; place-items: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,.08);
+  }
+  .rec.on { background: var(--rec); color: #fff; animation: puls 1.4s ease-in-out infinite; }
+  @keyframes puls { 0%,100% { box-shadow: 0 0 0 0 rgba(215,0,21,.35); } 50% { box-shadow: 0 0 0 12px rgba(215,0,21,0); } }
+  .rec svg { width: 34px; height: 34px; }
+  .timer { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 15px; min-height: 22px; }
+  textarea {
+    width: 100%; min-height: 96px; resize: vertical; font: inherit; color: var(--text);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+  }
+  .status { font-size: 14px; color: var(--muted); margin: 8px 0 0; min-height: 20px; }
+  .bar { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; margin-top: 8px; display: none; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  label.check { display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--muted); margin-top: 10px; }
+  .log { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow: auto; background: var(--bg); border-radius: 10px; padding: 10px; margin: 0 0 10px; }
+  .sr { position: absolute; left: -9999px; }
+  @media (min-width: 900px) { body { padding-top: 48px; } h1 { font-size: 32px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Sprachtest</h1>
+  <p class="lead">Prüft, ob Sprechen und Vorlesen auf diesem Gerät kostenlos funktionieren. Am besten einmal als App vom Home-Bildschirm öffnen.</p>
+
+  <section class="card" aria-labelledby="t-geraet">
+    <h2 id="t-geraet">Dieses Gerät</h2>
+    <p class="hint">Grün heißt: vorhanden. Ob es wirklich geht, zeigen die Tests darunter.</p>
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <section class="card" aria-labelledby="t-whisper">
+    <h2 id="t-whisper">1. Sprechen, Erkennung auf dem Gerät</h2>
+    <p class="hint">Tippen, sprechen, nochmal tippen. Der Text wird direkt auf dem Gerät erkannt, nichts geht ins Internet. Beim ersten Mal wird das Sprachmodell einmalig geladen.</p>
+    <div class="row">
+      <select id="modell" aria-label="Sprachmodell">
+        <option value="onnx-community/whisper-base">Modell: Mittel (genauer)</option>
+        <option value="onnx-community/whisper-tiny">Modell: Klein (schneller)</option>
+      </select>
+      <button id="laden">Modell laden</button>
+    </div>
+    <label class="check" id="gpu-wrap" hidden><input type="checkbox" id="gpu"> Grafikchip nutzen (schneller, aber noch unsicher)</label>
+    <div class="bar" id="bar"><div></div></div>
+    <p class="status" id="modell-status">Noch nicht geladen.</p>
+
+    <div class="rec-wrap">
+      <button class="rec" id="rec" aria-label="Aufnahme starten">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
+      </button>
+      <div class="timer" id="timer">Zum Sprechen tippen</div>
+    </div>
+    <textarea id="text1" placeholder="Hier erscheint der erkannte Text." aria-label="Erkannter Text"></textarea>
+    <p class="status" id="erk-status"></p>
+    <div class="row">
+      <button id="abspielen" disabled>Aufnahme anhören</button>
+      <label class="sr" for="datei">Audiodatei</label>
+      <input type="file" id="datei" accept="audio/*" hidden>
+      <button id="datei-btn">Audiodatei testen</button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="t-apple">
+    <h2 id="t-apple">2. Sprechen, Apple-Erkennung</h2>
+    <p class="hint">Zum Vergleich: die eingebaute Erkennung des Browsers. Sie läuft über Apple bzw. Google und geht in Apps vom Home-Bildschirm oft nicht.</p>
+    <div class="row"><button id="apple">Mit Apple-Erkennung sprechen</button></div>
+    <textarea id="text2" placeholder="Hier erscheint der Text der Apple-Erkennung." aria-label="Text der Apple-Erkennung"></textarea>
+    <p class="status" id="apple-status"></p>
+  </section>
+
+  <section class="card" aria-labelledby="t-vor">
+    <h2 id="t-vor">3. Vorlesen</h2>
+    <p class="hint">Liest den Text aus Test 1 mit einer Stimme des Geräts vor. Kostenlos und ohne Internet.</p>
+    <div class="row">
+      <select id="stimme" aria-label="Stimme"></select>
+      <button class="primary" id="vorlesen">Vorlesen</button>
+      <button id="stopp">Stopp</button>
+    </div>
+    <p class="status" id="vor-status"></p>
+  </section>
+
+  <section class="card" aria-labelledby="t-erg">
+    <h2 id="t-erg">Ergebnis</h2>
+    <p class="hint">Nach den Tests auf „Ergebnis kopieren“ tippen und Claude in den Chat einfügen.</p>
+    <div class="log" id="log"></div>
+    <div class="row"><button class="primary" id="kopieren">Ergebnis kopieren</button></div>
+    <p class="status" id="kopie-status"></p>
+  </section>
+</main>
+
+<script type="module">
+const TF_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1';
+const $ = (id) => document.getElementById(id);
+const fmt = (s) => s.toFixed(1).replace('.', ',');
+
+// ---------- Protokoll ----------
+const protokoll = [];
+function log(msg) {
+  const t = new Date().toLocaleTimeString('de-DE');
+  protokoll.push(`${t}  ${msg}`);
+  $('log').textContent = protokoll.join('\n');
+  $('log').scrollTop = $('log').scrollHeight;
+}
+
+// ---------- Gerät prüfen ----------
+const standalone = window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+const hatMikro = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+const hatRecorder = typeof MediaRecorder !== 'undefined';
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const hatTTS = 'speechSynthesis' in window;
+const hatGPU = 'gpu' in navigator;
+const geraet = [
+  ['Als App geöffnet', standalone, standalone ? 'ok' : 'warn'],
+  ['Mikrofon', hatMikro, hatMikro ? 'ok' : 'bad'],
+  ['Aufnahme', hatRecorder, hatRecorder ? 'ok' : 'bad'],
+  ['Apple-Erkennung', !!SR, SR ? 'ok' : 'warn'],
+  ['Vorlesen', hatTTS, hatTTS ? 'ok' : 'bad'],
+  ['Grafikchip (WebGPU)', hatGPU, hatGPU ? 'ok' : 'warn'],
+];
+$('chips').innerHTML = geraet.map(([n, v, c]) => `<span class="chip ${c}">${n}: ${v ? 'ja' : 'nein'}</span>`).join('');
+if (hatGPU) $('gpu-wrap').hidden = false;
+log(`Gerät: ${navigator.userAgent}`);
+log(`Als App geöffnet: ${standalone ? 'ja' : 'nein'} | Mikrofon: ${hatMikro ? 'ja' : 'nein'} | Aufnahme: ${hatRecorder ? 'ja' : 'nein'} | Apple-Erkennung: ${SR ? 'ja' : 'nein'} | Vorlesen: ${hatTTS ? 'ja' : 'nein'} | WebGPU: ${hatGPU ? 'ja' : 'nein'}`);
+
+// ---------- Whisper im Hintergrund (Worker) ----------
+const workerCode = `
+import { pipeline, env } from '${TF_URL}';
+env.allowLocalModels = false;
+let asr = null, aktiv = '';
+self.onmessage = async (e) => {
+  const m = e.data;
+  try {
+    if (m.typ === 'laden') {
+      if (asr && aktiv === m.schluessel) { self.postMessage({ typ: 'bereit', zeit: 0 }); return; }
+      const t0 = performance.now();
+      const opts = { progress_callback: (p) => self.postMessage({ typ: 'fortschritt', p }) };
+      if (m.gpu) { opts.device = 'webgpu'; opts.dtype = { encoder_model: 'fp32', decoder_model_merged: 'q4' }; }
+      else { opts.device = 'wasm'; opts.dtype = 'q8'; }
+      asr = await pipeline('automatic-speech-recognition', m.modell, opts);
+      aktiv = m.schluessel;
+      self.postMessage({ typ: 'bereit', zeit: (performance.now() - t0) / 1000 });
+    } else if (m.typ === 'erkennen') {
+      const t0 = performance.now();
+      const out = await asr(m.audio, { language: 'german', task: 'transcribe', chunk_length_s: 30, stride_length_s: 5 });
+      self.postMessage({ typ: 'text', text: (out.text || '').trim(), zeit: (performance.now() - t0) / 1000 });
+    }
+  } catch (err) {
+    self.postMessage({ typ: 'fehler', text: String(err && err.message || err) });
+  }
+};`;
+let worker = null, modellBereit = false, warteLaden = null, warteText = null;
+const dateien = {};
+function neuerWorker() {
+  if (worker) worker.terminate();
+  worker = new Worker(URL.createObjectURL(new Blob([workerCode], { type: 'text/javascript' })), { type: 'module' });
+  worker.onerror = (e) => { const t = 'Hintergrund-Prozess fehlgeschlagen: ' + (e.message || 'unbekannt'); $('modell-status').textContent = t; log(t); if (warteLaden) { warteLaden.reject(new Error(t)); warteLaden = null; } };
+  worker.onmessage = (e) => {
+    const m = e.data;
+    if (m.typ === 'fortschritt') {
+      const p = m.p;
+      if (p.status === 'progress' && p.file && p.total) {
+        dateien[p.file] = [p.loaded || 0, p.total];
+        const sum = Object.values(dateien).reduce((a, [l, t]) => [a[0] + l, a[1] + t], [0, 0]);
+        $('bar').style.display = 'block';
+        $('bar').firstElementChild.style.width = Math.min(100, sum[0] / sum[1] * 100) + '%';
+        $('modell-status').textContent = `Lädt Modell … ${Math.round(sum[0] / 1e6)} von ${Math.round(sum[1] / 1e6)} MB`;
+      }
+    } else if (m.typ === 'bereit') {
+      modellBereit = true;
+      $('bar').style.display = 'none';
+      const mb = Math.round(Object.values(dateien).reduce((a, [, t]) => a + t, 0) / 1e6);
+      const txt = m.zeit ? `Modell bereit nach ${fmt(m.zeit)} s${mb ? ` (${mb} MB)` : ''}.` : 'Modell bereit.';
+      $('modell-status').textContent = txt;
+      log(`Whisper geladen: ${$('modell').value} | ${$('gpu').checked ? 'Grafikchip' : 'Prozessor'} | ${txt}`);
+      if (warteLaden) { warteLaden.resolve(); warteLaden = null; }
+    } else if (m.typ === 'text') {
+      if (warteText) { warteText.resolve(m); warteText = null; }
+    } else if (m.typ === 'fehler') {
+      $('bar').style.display = 'none';
+      log('Fehler: ' + m.text);
+      if (warteLaden) { $('modell-status').textContent = 'Laden fehlgeschlagen: ' + m.text; warteLaden.reject(new Error(m.text)); warteLaden = null; }
+      if (warteText) { warteText.reject(new Error(m.text)); warteText = null; }
+    }
+  };
+}
+function modellLaden() {
+  if (modellBereit) return Promise.resolve();
+  if (warteLaden) return warteLaden.promise;
+  neuerWorker();
+  for (const k in dateien) delete dateien[k];
+  $('modell-status').textContent = 'Lädt Modell …';
+  let resolve, reject;
+  const promise = new Promise((a, b) => { resolve = a; reject = b; });
+  warteLaden = { resolve, reject, promise };
+  worker.postMessage({ typ: 'laden', modell: $('modell').value, gpu: $('gpu').checked, schluessel: $('modell').value + $('gpu').checked });
+  return promise;
+}
+$('laden').onclick = () => modellLaden().catch(() => {});
+$('modell').onchange = $('gpu').onchange = () => { modellBereit = false; $('modell-status').textContent = 'Noch nicht geladen.'; };
+
+// Audio auf 16 kHz Mono bringen (das braucht Whisper)
+async function zu16k(blob) {
+  const buf = await blob.arrayBuffer();
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const ac = new AC();
+  const dec = await new Promise((ok, fail) => ac.decodeAudioData(buf.slice(0), ok, fail));
+  ac.close && ac.close();
+  const len = Math.ceil(dec.duration * 16000);
+  const off = new OfflineAudioContext(1, len, 16000);
+  const src = off.createBufferSource();
+  src.buffer = dec; src.connect(off.destination); src.start();
+  const res = await off.startRendering();
+  return { daten: res.getChannelData(0), dauer: dec.duration };
+}
+
+async function erkenne(blob, quelle) {
+  $('erk-status').textContent = 'Bereite Audio vor …';
+  try {
+    const { daten, dauer } = await zu16k(blob);
+    log(`${quelle}: ${fmt(dauer)} s Audio`);
+    if (!modellBereit) { $('erk-status').textContent = 'Lade Modell …'; await modellLaden(); }
+    $('erk-status').textContent = 'Erkenne Text …';
+    let resolve, reject;
+    const p = new Promise((a, b) => { resolve = a; reject = b; });
+    warteText = { resolve, reject };
+    worker.postMessage({ typ: 'erkennen', audio: daten }, [daten.buffer]);
+    const m = await p;
+    $('text1').value = m.text;
+    const faktor = dauer > 0 ? m.zeit / dauer : 0;
+    const msg = `Erkannt in ${fmt(m.zeit)} s (für ${fmt(dauer)} s Sprache).`;
+    $('erk-status').textContent = msg;
+    log(`Whisper-Ergebnis: „${m.text}“ | ${msg} | Faktor ${fmt(faktor)}`);
+  } catch (err) {
+    const t = 'Erkennung fehlgeschlagen: ' + (err.message || err);
+    $('erk-status').textContent = t; log(t);
+  }
+}
+
+// ---------- Aufnahme ----------
+let rec = null, stream = null, stueck = [], letzteAufnahme = null, t0 = 0, uhr = null;
+function typWaehlen() {
+  for (const t of ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg']) {
+    if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) return t;
+  }
+  return '';
+}
+$('rec').onclick = async () => {
+  if (rec && rec.state === 'recording') { rec.stop(); return; }
+  if (!hatMikro || !hatRecorder) { $('timer').textContent = 'Mikrofon wird hier nicht unterstützt.'; log('Aufnahme nicht möglich: keine Mikrofon-Schnittstelle'); return; }
+  modellLaden().catch(() => {}); // parallel schon mal laden
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    log('Mikrofon-Freigabe: erteilt');
+  } catch (err) {
+    $('timer').textContent = 'Kein Zugriff aufs Mikrofon.';
+    log('Mikrofon-Freigabe: verweigert oder Fehler (' + (err.name || err) + ')');
+    return;
+  }
+  const typ = typWaehlen();
+  rec = new MediaRecorder(stream, typ ? { mimeType: typ } : undefined);
+  stueck = [];
+  rec.ondataavailable = (e) => { if (e.data && e.data.size) stueck.push(e.data); };
+  rec.onstop = () => {
+    clearInterval(uhr);
+    stream.getTracks().forEach((t) => t.stop());
+    $('rec').classList.remove('on'); $('rec').setAttribute('aria-label', 'Aufnahme starten');
+    $('timer').textContent = 'Zum Sprechen tippen';
+    letzteAufnahme = new Blob(stueck, { type: rec.mimeType || typ || 'audio/mp4' });
+    $('abspielen').disabled = false;
+    log(`Aufnahme: ${rec.mimeType || typ || 'Standardformat'}, ${Math.round(letzteAufnahme.size / 1024)} KB`);
+    erkenne(letzteAufnahme, 'Aufnahme');
+  };
+  rec.start();
+  t0 = Date.now();
+  $('rec').classList.add('on'); $('rec').setAttribute('aria-label', 'Aufnahme beenden');
+  uhr = setInterval(() => { $('timer').textContent = `Aufnahme läuft … ${fmt((Date.now() - t0) / 1000)} s · zum Beenden tippen`; }, 100);
+};
+$('abspielen').onclick = () => { if (letzteAufnahme) new Audio(URL.createObjectURL(letzteAufnahme)).play(); };
+$('datei-btn').onclick = () => $('datei').click();
+$('datei').onchange = () => { const f = $('datei').files[0]; if (f) erkenne(f, 'Datei ' + f.name); };
+window.__testErkennung = (blob) => erkenne(blob, 'Testdatei'); // nur für automatische Prüfung
+
+// ---------- Apple-Erkennung ----------
+let sr = null;
+$('apple').onclick = () => {
+  if (!SR) { $('apple-status').textContent = 'Hier nicht verfügbar.'; log('Apple-Erkennung: nicht verfügbar'); return; }
+  if (sr) { sr.stop(); return; }
+  sr = new SR();
+  sr.lang = 'de-DE'; sr.interimResults = true; sr.continuous = false;
+  const start = Date.now();
+  sr.onstart = () => { $('apple').textContent = 'Stopp'; $('apple-status').textContent = 'Hört zu …'; };
+  sr.onresult = (e) => {
+    let t = '';
+    for (const r of e.results) t += r[0].transcript;
+    $('text2').value = t;
+  };
+  sr.onerror = (e) => { $('apple-status').textContent = 'Fehler: ' + e.error; log('Apple-Erkennung Fehler: ' + e.error); };
+  sr.onend = () => {
+    $('apple').textContent = 'Mit Apple-Erkennung sprechen';
+    if ($('apple-status').textContent === 'Hört zu …') $('apple-status').textContent = 'Fertig.';
+    log(`Apple-Erkennung beendet nach ${fmt((Date.now() - start) / 1000)} s: „${$('text2').value}“`);
+    sr = null;
+  };
+  try { sr.start(); } catch (err) { $('apple-status').textContent = 'Start fehlgeschlagen: ' + err.message; log('Apple-Erkennung Start: ' + err.message); sr = null; }
+};
+
+// ---------- Vorlesen ----------
+function stimmenLaden() {
+  if (!hatTTS) { $('stimme').innerHTML = '<option>Nicht verfügbar</option>'; return; }
+  const alle = speechSynthesis.getVoices();
+  const de = alle.filter((v) => (v.lang || '').toLowerCase().startsWith('de'));
+  const liste = de.length ? de : alle;
+  const vorher = $('stimme').value;
+  $('stimme').innerHTML = liste.map((v) => `<option value="${v.voiceURI}">${v.name} (${v.lang})${v.localService ? '' : ' · online'}</option>`).join('');
+  if (vorher) $('stimme').value = vorher;
+  if (alle.length && !stimmenLaden.geloggt) { stimmenLaden.geloggt = true; log(`Stimmen: ${alle.length} gesamt, davon ${de.length} deutsch (${de.map((v) => v.name).join(', ') || 'keine'})`); }
+}
+if (hatTTS) { stimmenLaden(); speechSynthesis.onvoiceschanged = stimmenLaden; }
+$('vorlesen').onclick = () => {
+  if (!hatTTS) return;
+  const text = $('text1').value.trim() || 'Hallo. Das ist ein Test der Vorlese-Stimme.';
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  const v = speechSynthesis.getVoices().find((x) => x.voiceURI === $('stimme').value);
+  if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'de-DE';
+  u.onstart = () => { $('vor-status').textContent = 'Liest vor …'; };
+  u.onend = () => { $('vor-status').textContent = 'Fertig.'; log(`Vorlesen ok mit Stimme ${v ? v.name : 'Standard'}`); };
+  u.onerror = (e) => { $('vor-status').textContent = 'Fehler: ' + e.error; log('Vorlesen Fehler: ' + e.error); };
+  speechSynthesis.speak(u);
+};
+$('stopp').onclick = () => { if (hatTTS) speechSynthesis.cancel(); $('vor-status').textContent = 'Gestoppt.'; };
+
+// ---------- Ergebnis kopieren ----------
+$('kopieren').onclick = async () => {
+  const text = 'Sprachtest-Ergebnis\n' + protokoll.join('\n');
+  try { await navigator.clipboard.writeText(text); $('kopie-status').textContent = 'Kopiert. Jetzt im Chat einfügen.'; }
+  catch {
+    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand('copy'); ta.remove();
+    $('kopie-status').textContent = ok ? 'Kopiert. Jetzt im Chat einfügen.' : 'Kopieren ging nicht. Bitte Screenshot vom Protokoll schicken.';
+  }
+};
+</script>
+</body>
+</html>
